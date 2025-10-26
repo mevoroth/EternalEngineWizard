@@ -1,6 +1,5 @@
 #include "{0}.hpp"
 #include "Core/SystemCreateInformation.hpp"
-#include "File/FilePath.hpp"
 
 namespace {0}
 {

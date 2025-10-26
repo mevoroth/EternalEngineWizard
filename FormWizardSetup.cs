@@ -55,8 +55,11 @@ namespace EternalEngineWizard
 			return MSBuildPath;
 		}
 
-		public static void ExecuteCommand(string InWorkingDirectory, string InFileName, string InArguments)
+		private void ExecuteCommand(string InWorkingDirectory, string InFileName, string InArguments)
 		{
+			_Tracker.Step();
+			UserControlInstallation.SetProgress(_Tracker.GetProgress(), InFileName + " " + InArguments);
+
 			StringBuilder OutputStringBuilder = new StringBuilder();
 			StringBuilder ErrorStringBuilder = new StringBuilder();
 
@@ -94,7 +97,7 @@ namespace EternalEngineWizard
 			Console.WriteLine(ErrorStringBuilder.ToString());
 		}
 
-		public static void ExecuteCommand(string InWorkingDirectory, string InCommand)
+		private void ExecuteCommand(string InWorkingDirectory, string InCommand)
 		{
 			string[] CommandTokens = InCommand.Split(' ');
 			string CommandArguments = String.Join(" ", CommandTokens.Skip(1).Take(CommandTokens.Length - 1).ToArray());
@@ -116,7 +119,7 @@ namespace EternalEngineWizard
 			UserControlWizardSetup.WizardStorage = WizardStorage;
 		}
 
-		private void UserControlInstallation_Load(object sender, EventArgs e)
+		private void UserControlInstallation_Load(object InSender, EventArgs InEvent)
 		{
 			UserControlInstallation.WizardStorage = WizardStorage;
 		}
@@ -126,48 +129,54 @@ namespace EternalEngineWizard
 			UserControlWizardSetup.Visible = false;
 			UserControlInstallation.Visible = true;
 
-			//string[] InstallationCommands = File.ReadAllLines("InstallationTemplates/Installation.template.bat");
+			string[] InstallationCommands = File.ReadAllLines("InstallationTemplates/Installation.template.bat");
 
-			//using (DirectoryBackup CurrentDirectoryBackup = new DirectoryBackup())
-			//{
-			//	Directory.SetCurrentDirectory(WizardStorage.ProjectFolder);
+			List<string> InstallationFiles = new List<string>(Directory.GetFiles("InstallationTemplates/Project", "*", SearchOption.AllDirectories));
+			InstallationFiles.Insert(0, "InstallationTemplates/Solution.template.cs");
 
-			//	for (int InstallationCommandIndex = 0; InstallationCommandIndex < InstallationCommands.Length; ++InstallationCommandIndex)
-			//		ExecuteCommand(WizardStorage.ProjectFolder, InstallationCommands[InstallationCommandIndex]);
-			//}
+			_Tracker = new ProgressTracker(InstallationCommands.Length + InstallationFiles.Count + 2 + 1);
 
-			//string[] ReplacementPatterns = new string[]
-			//{
-			//	WizardStorage.ProjectName,
-			//	"Platform.win64"
-			//};
-			//List<string> InstallationFiles = new List<string>(Directory.GetFiles("InstallationTemplates/Project"));
-			//InstallationFiles.Insert(0, "InstallationTemplates/Solution.template.cs");
+			using (DirectoryBackup CurrentDirectoryBackup = new DirectoryBackup())
+			{
+				Directory.SetCurrentDirectory(WizardStorage.ProjectFolder);
 
-			//string[] OutputInstallationFiles = new string[InstallationFiles.Count];
-			//for (int FileIndex = 0; FileIndex < InstallationFiles.Count; ++FileIndex)
-			//{
-			//	string OutInstallationFile = Regex.Replace(InstallationFiles[FileIndex], "(Solution|Project)", WizardStorage.ProjectName)
-			//		.Replace("InstallationTemplates/", "\\")
-			//		.Replace(".template", "")
-			//		.Replace(".cs", ".sharpmake.cs");
+				for (int InstallationCommandIndex = 0; InstallationCommandIndex < InstallationCommands.Length; ++InstallationCommandIndex)
+					ExecuteCommand(WizardStorage.ProjectFolder, InstallationCommands[InstallationCommandIndex]);
+			}
 
-			//	OutputInstallationFiles[FileIndex] = WizardStorage.ProjectFolder + OutInstallationFile;
-			//}
+			string[] ReplacementPatterns = new string[]
+			{
+				WizardStorage.ProjectName,
+				"Platform.win64"
+			};
 
-			//for (int FileIndex = 0; FileIndex < InstallationFiles.Count; ++FileIndex)
-			//{
-			//	string FileContent = File.ReadAllText(InstallationFiles[FileIndex]);
+			string[] OutputInstallationFiles = new string[InstallationFiles.Count];
+			for (int FileIndex = 0; FileIndex < InstallationFiles.Count; ++FileIndex)
+			{
+				string OutInstallationFile = Regex.Replace(InstallationFiles[FileIndex], "(Solution|Project)", WizardStorage.ProjectName)
+					.Replace("InstallationTemplates/", "\\")
+					.Replace(".template", "")
+					.Replace(".cs", ".sharpmake.cs");
 
-			//	for (int ReplacementPatternIndex = 0; ReplacementPatternIndex < ReplacementPatterns.Length; ++ReplacementPatternIndex)
-			//		FileContent = FileContent.Replace("{" + ReplacementPatternIndex + "}", ReplacementPatterns[ReplacementPatternIndex]);
+				OutputInstallationFiles[FileIndex] = WizardStorage.ProjectFolder + OutInstallationFile;
+			}
 
-			//	string OutputInstallationFolder = Path.GetDirectoryName(OutputInstallationFiles[FileIndex]);
-			//	if (!Directory.Exists(OutputInstallationFolder))
-			//		Directory.CreateDirectory(OutputInstallationFolder);
+			for (int FileIndex = 0; FileIndex < InstallationFiles.Count; ++FileIndex)
+			{
+				_Tracker.Step();
+				UserControlInstallation.SetProgress(_Tracker.GetProgress(), string.Format("Writing: {0}", InstallationFiles[FileIndex]));
 
-			//	File.WriteAllText(OutputInstallationFiles[FileIndex], FileContent);
-			//}
+				string FileContent = File.ReadAllText(InstallationFiles[FileIndex]);
+
+				for (int ReplacementPatternIndex = 0; ReplacementPatternIndex < ReplacementPatterns.Length; ++ReplacementPatternIndex)
+					FileContent = FileContent.Replace("{" + ReplacementPatternIndex + "}", ReplacementPatterns[ReplacementPatternIndex]);
+
+				string OutputInstallationFolder = Path.GetDirectoryName(OutputInstallationFiles[FileIndex]);
+				if (!Directory.Exists(OutputInstallationFolder))
+					Directory.CreateDirectory(OutputInstallationFolder);
+
+				File.WriteAllText(OutputInstallationFiles[FileIndex], FileContent);
+			}
 
 			using (DirectoryBackup CurrentDirectoryBackup = new DirectoryBackup())
 			{
@@ -180,6 +189,12 @@ namespace EternalEngineWizard
 
 				ExecuteCommand(WizardStorage.ProjectFolder, WizardStorage.ProjectFolder + "\\..\\Sharpmake\\Sharpmake.Application\\bin\\Release\\net6.0\\Sharpmake.Application.exe", string.Format("/sources('{0}.sharpmake.cs')", WizardStorage.ProjectName));
 			}
+
+
+			_Tracker.Step();
+			UserControlInstallation.SetProgress(1.0f, "Installation completed");
+
+			_Tracker = null;
 		}
 
 		private class DirectoryBackup : IDisposable
@@ -201,5 +216,28 @@ namespace EternalEngineWizard
 
 			private string BackupDirectory = null;
 		}
+
+		private class ProgressTracker
+		{
+			public ProgressTracker(int InStepsCount)
+			{
+				_StepsCount = InStepsCount;
+			}
+
+			public void Step()
+			{
+				++_CurrentStep;
+			}
+
+			public float GetProgress()
+			{
+				return (float)_CurrentStep / (float)_StepsCount;
+			}
+
+			private int _CurrentStep = 0;
+			private int _StepsCount = 0;
+		}
+
+		ProgressTracker _Tracker = null;
 	}
 }

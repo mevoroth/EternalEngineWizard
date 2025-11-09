@@ -59,6 +59,7 @@
     <Compile Include="FormWizardSetup.Designer.cs">
       <DependentUpon>FormWizardSetup.cs</DependentUpon>
     </Compile>
+    <Compile Include="WizardUtils.cs" />
     <None Include="InstallationTemplates\Solution.template.cs" />
     <None Include="InstallationTemplates\Project\Project.template.cs" />
     <Compile Include="Program.cs" />
